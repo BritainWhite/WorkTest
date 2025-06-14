@@ -16,19 +16,18 @@ function getFormattedDate() {
 
 function fetchJSON() {
   const date = getFormattedDate();
-  const url = `https://radapps3.wal-mart.com/Protected/CaseVisibility/ashx/Main.ashx?func=init&storeNbr=5307&businessDate=${date}`;
+  const rawUrl = `https://radapps3.wal-mart.com/Protected/CaseVisibility/ashx/Main.ashx?func=init&storeNbr=5307&businessDate=${date}`;
+  const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(rawUrl)}`;
 
-  // Update link
+  // Update the visible URL and iframe
   const link = document.getElementById("init");
-  link.href = url;
-  link.innerText = url;
+  link.href = rawUrl;
+  link.innerText = rawUrl;
 
-  // Update iframe
-  const iframe = document.getElementById("previewIframe");
-  iframe.src = url;
+  document.getElementById("previewIframe").src = rawUrl;
 
-  // Try to fetch JSON
-  fetch(url)
+  // Try fetching through proxy
+  fetch(proxyUrl)
     .then(res => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
