@@ -1,7 +1,20 @@
 import { DateTime } from "https://cdn.jsdelivr.net/npm/luxon@3.4.3/+esm";
 
 let step = 0;
+let cleared = false;
 const steps = ["Today", "Yesterday", "Tomorrow"];
+
+// Clear server on first submission if needed
+async function ensureServerCleared() {
+  if (cleared) return;
+  try {
+    await fetch("https://valid-grossly-gibbon.ngrok-free.app/clear", { method: "POST" });
+    cleared = true;
+    console.log("✅ Server cleared before starting.");
+  } catch (err) {
+    console.warn("❌ Failed to clear server:", err);
+  }
+}
 
 function getDateOffset(offset) {
   const now = new Date();
@@ -28,27 +41,22 @@ function saveToFolder(folder, filename, data) {
   const fullPath = `${folder}/${filename}`;
   const json = JSON.stringify(data, null, 2);
 
-  // Save to localStorage
   localStorage.setItem(fullPath, json);
 
-  // Also send to backend server
   fetch("https://valid-grossly-gibbon.ngrok-free.app/save", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      path: fullPath,
-      content: json
-    })
-  }).catch(err => console.error("Failed to upload to server:", err));
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path: fullPath, content: json })
+  }).catch(err => console.error("Upload error:", err));
 }
 
 function cleanFileName(name) {
   return name.replace(/[<>:"\/\\|?*\u0000-\u001F]/g, '').replace(/\s+/g, "_").trim();
 }
 
-function submitJSON() {
+async function submitJSON() {
+  await ensureServerCleared();
+
   const textarea = document.getElementById("jsonInput");
   let content = textarea.value.trim();
 
@@ -74,7 +82,7 @@ function submitJSON() {
     }
 
   } catch (e) {
-    alert("Invalid JSON. Please make sure you copied it correctly.");
+    alert("Invalid JSON.");
     return;
   }
 
@@ -214,7 +222,60 @@ function showSummary() {
   document.body.appendChild(container);
 }
 
+// Button Handlers
+function resetServer() {
+  fetch("https://valid-grossly-gibbon.ngrok-free.app/clear", { method: "POST" })
+    .then(() => {
+      cleared = true;
+      alert("✅ Server has been cleared.");
+    })
+    .catch(() => alert("❌ Failed to clear server."));
+}
+
+function loadFromServer() {
+  const files = [
+    "Today/main.json",
+    "Today/trailers.json",
+    "Yesterday/main.json",
+    "Yesterday/trailers.json",
+    "Tomorrow/main.json",
+    "Tomorrow/trailers.json"
+  ];
+  const jobs = [];
+
+  for (const day of steps) {
+    jobs.push(fetch(`https://valid-grossly-gibbon.ngrok-free.app/folder/${day}/schedules`)
+      .then(res => res.json())
+      .then(fileList => fileList.map(f => `${day}/schedules/${f}`))
+      .catch(() => []));
+  }
+
+  Promise.all([
+    ...files.map(path =>
+      fetch(`https://valid-grossly-gibbon.ngrok-free.app/file/${path}`)
+        .then(res => res.json())
+        .then(json => localStorage.setItem(path, JSON.stringify(json)))
+        .catch(() => null)
+    ),
+    ...jobs.map(group =>
+      group.then(paths =>
+        Promise.all(paths.map(path =>
+          fetch(`https://valid-grossly-gibbon.ngrok-free.app/file/${path}`)
+            .then(res => res.json())
+            .then(json => localStorage.setItem(path, JSON.stringify(json)))
+            .catch(() => null)
+        ))
+      )
+    )
+  ]).then(() => {
+    alert("✅ Loaded data from server.");
+    showSummary();
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   updateStep();
   document.getElementById("submitBtn").addEventListener("click", submitJSON);
+  document.getElementById("resetBtn").addEventListener("click", resetServer);
+  document.getElementById("loadBtn").addEventListener("click", loadFromServer);
 });
