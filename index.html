@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Walmart JSON Submit</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>JSON Submit Tool</title>
   <style>
     body {
       font-family: sans-serif;
@@ -59,20 +60,19 @@
   </style>
 </head>
 <body>
-  <div style="margin-bottom: 1em;">
-    <button id="loadBtn">🔁 Load Saved Data</button>
-    <button id="resetBtn">🧹 Reset Server</button>
-  </div>
+  <h1>Submit JSON for Each Day</h1>
+  <button id="loadBtn">Load</button>
+  <button id="resetBtn">Reset</button>
+  <p id="stepLabel"></p>
 
-  <h2 id="stepLabel"></h2>
+  <textarea id="jsonInput" placeholder="Paste JSON here..."></textarea>
+  <br />
+  <button id="submitBtn">Submit</button>
 
-  <div class="iframe-container" id="iframePanel">
-    <iframe id="previewIframe" src=""></iframe>
-  </div>
+  <p><a id="iframeLink" target="_self">Loading...</a></p>
 
-  <div id="inputPanel">
-    <textarea id="jsonInput" placeholder="Paste JSON here"></textarea>
-    <button id="submitBtn">Submit</button>
+  <div class="iframe-container">
+    <iframe id="previewIframe"></iframe>
   </div>
 
   <script type="module" src="script.js"></script>
