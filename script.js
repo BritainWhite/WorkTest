@@ -72,12 +72,14 @@ submitBtn.onclick = async () => {
 
   if (currentStepIndex < steps.length) {
     stepLabel.textContent = `Paste ${steps[currentStepIndex]}'s JSON`;
-
-    // 👉 Set iframe src to next day’s Main.ashx URL
-    const nextDay = steps[currentStepIndex];
-    const url = getInitUrl();
-    iframe.src = url;
-
+  
+    const nowData = dayData[steps[currentStepIndex - 1]];
+    const nextDate = nowData?.schedule?.business_date;
+  
+    if (nextDate) {
+      const url = getInitUrl(nextDate);
+      iframe.src = url;
+    }
   } else {
     stepLabel.textContent = "Processing trailers...";
 
