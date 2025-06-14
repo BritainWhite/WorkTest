@@ -18,10 +18,16 @@ function fetchJSON() {
   const date = getFormattedDate();
   const url = `https://radapps3.wal-mart.com/Protected/CaseVisibility/ashx/Main.ashx?func=init&storeNbr=5307&businessDate=${date}`;
 
+  // Update link
   const link = document.getElementById("init");
   link.href = url;
   link.innerText = url;
 
+  // Update iframe
+  const iframe = document.getElementById("previewIframe");
+  iframe.src = url;
+
+  // Try to fetch JSON
   fetch(url)
     .then(res => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
