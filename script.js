@@ -50,14 +50,15 @@ submitBtn.addEventListener("click", async () => {
     return;
   }
 
-  localStorage.setItem(`${day}/main.json`, JSON.stringify(parsed));
-  await saveToServer(day, "main.json", parsed);
-  submittedData[day] = parsed;
-
+  // ✅ CLEAR FIRST — then save
   if (!cleared) {
     await fetch("https://valid-grossly-gibbon.ngrok-free.app/clear", { method: "POST" }).catch(() => {});
     cleared = true;
   }
+
+  localStorage.setItem(`${day}/main.json`, JSON.stringify(parsed));
+  await saveToServer(day, "main.json", parsed);
+  submittedData[day] = parsed;
 
   currentStep++;
   jsonInput.value = "";
