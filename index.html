@@ -61,8 +61,9 @@
 </head>
 <body>
   <h1>Submit JSON for Each Day</h1>
-  <button id="loadBtn">Load</button>
-  <button id="resetBtn">Reset</button>
+  <button id="loadBtn">📦 Load</button>
+  <button id="resetBtn">🧹 Reset</button>
+  <button id="refreshBtn">🔃 Refresh</button>
   <p id="stepLabel"></p>
 
   <p><a id="iframeLink" target="_self">Loading...</a></p>
@@ -76,5 +77,11 @@
   <button id="submitBtn">Submit</button>
 
   <script type="module" src="script.js"></script>
+  <script>
+    document.getElementById("refreshBtn").addEventListener("click", () => {
+      localStorage.clear(); // Clear local storage for a true reset
+      location.reload();    // Refresh page
+    });
+  </script>
 </body>
 </html>
