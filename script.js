@@ -5,6 +5,7 @@ const jsonInput = document.getElementById("jsonInput");
 const stepLabel = document.getElementById("stepLabel");
 const loadBtn = document.getElementById("loadBtn");
 const resetBtn = document.getElementById("resetBtn");
+const iframe = document.getElementById("previewIframe");
 
 let steps = ["Today", "Yesterday", "Tomorrow"];
 let currentStepIndex = 0;
@@ -26,6 +27,22 @@ loadBtn.onclick = async () => {
   });
   alert("Loaded saved files into localStorage.");
 };
+
+function getInitUrl(dateOverride = null) {
+  let formattedDate;
+  if (dateOverride) {
+    formattedDate = dateOverride;
+  } else {
+    const now = new Date();
+    if (now.getHours() < 6) now.setDate(now.getDate() - 1);
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    formattedDate = `${yyyy}/${mm}/${dd}`;
+  }
+
+  return `https://radapps3.wal-mart.com/Protected/CaseVisibility/ashx/Main.ashx?func=init&storeNbr=5307&businessDate=${formattedDate}`;
+}
 
 submitBtn.onclick = async () => {
   const raw = jsonInput.value.trim();
@@ -55,6 +72,12 @@ submitBtn.onclick = async () => {
 
   if (currentStepIndex < steps.length) {
     stepLabel.textContent = `Paste ${steps[currentStepIndex]}'s JSON`;
+
+    // 👉 Set iframe src to next day’s Main.ashx URL
+    const nextDay = steps[currentStepIndex];
+    const url = getInitUrl();
+    iframe.src = url;
+
   } else {
     stepLabel.textContent = "Processing trailers...";
 
