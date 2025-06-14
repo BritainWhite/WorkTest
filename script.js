@@ -28,6 +28,10 @@ function saveToFolder(folder, filename, data) {
   localStorage.setItem(`${folder}/${filename}`, JSON.stringify(data, null, 2));
 }
 
+function cleanFileName(name) {
+  return name.replace(/[<>:"\/\\|?*\u0000-\u001F]/g, '').replace(/\s+/g, "_").trim();
+}
+
 function submitJSON() {
   const textarea = document.getElementById("jsonInput");
   let content = textarea.value.trim();
@@ -39,6 +43,20 @@ function submitJSON() {
 
     const trailersJson = generateTrailerSummary(parsed);
     saveToFolder(folder, "trailers.json", trailersJson);
+
+    const assocGroups = {};
+    const associates = parsed.schedule?.scheduled_associates ?? [];
+    for (const assoc of associates) {
+      const title = assoc.shift1_job_desc?.trim() || "Unknown";
+      const cleaned = cleanFileName(title);
+      if (!assocGroups[cleaned]) assocGroups[cleaned] = [];
+      assocGroups[cleaned].push(assoc);
+    }
+
+    for (const [cleanedTitle, group] of Object.entries(assocGroups)) {
+      saveToFolder(`${folder}/schedules`, `${cleanedTitle}.json`, group);
+    }
+
   } catch (e) {
     alert("Invalid JSON. Please make sure you copied it correctly.");
     return;
@@ -152,35 +170,33 @@ function showSummary() {
 
   for (const folder of steps) {
     const raw = localStorage.getItem(`${folder}/trailers.json`);
-    if (!raw) continue;
-    const data = JSON.parse(raw);
+    const jobStats = {};
+
+    // Load all schedule keys
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key.startsWith(`${folder}/schedules/`) && key.endsWith(".json")) {
+        const group = JSON.parse(localStorage.getItem(key));
+        const jobName = key.replace(`${folder}/schedules/`, "").replace(/\.json$/, "").replace(/_/g, " ");
+        jobStats[jobName] = group.length;
+      }
+    }
+
+    const jobBlock = Object.entries(jobStats)
+      .map(([job, count]) => `${job}: ${count}`)
+      .join("<br/>");
 
     const block = document.createElement("div");
     block.className = "summary-block";
     block.innerHTML = `
       <strong>${folder}</strong><br/>
-      Business Date: ${data.business_date}<br/>
-      Trailers: ${data.trailer_count}<br/>
-      Total Cases: ${data.totals.caseQuantity}<br/>
-      Floor Qty: ${data.totals.floorCaseQuantity}<br/>
-      Pallets: ${data.totals.palletQuantity}<br/>
-      Breakpacks: ${data.totals.breakPackCount}<br/>
-      <button class="download-btn" onclick="downloadJSON('${folder}/trailers.json', '${folder}_trailers.json')">Download JSON</button>
+      ${raw ? `Trailers: ${JSON.parse(raw).trailer_count}<br/>` : ""}
+      <div class="scroll-frame">${jobBlock || "No schedule data."}</div>
     `;
     container.appendChild(block);
   }
 
   document.body.appendChild(container);
-}
-
-function downloadJSON(key, filename) {
-  const json = localStorage.getItem(key);
-  if (!json) return alert("No data found.");
-  const blob = new Blob([json], { type: "application/json" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  link.click();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
