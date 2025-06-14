@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Fetch Test</title>
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <label for="customDate">Custom Date (yyyy/mm/dd):</label>
+  <input type="text" id="customDate" placeholder="Optional (e.g. 2024/05/10)">
+  <button onclick="fetchJSON()">Fetch JSON</button>
+
+  <p>
+    <strong>URL:</strong> <a id="init" href="#" target="_blank"></a>
+  </p>
+
+  <pre id="output" style="white-space: pre-wrap; border: 1px solid #ccc; padding: 10px;"></pre>
+</body>
+</html>
