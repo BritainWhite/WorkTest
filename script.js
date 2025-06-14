@@ -25,7 +25,23 @@ function updateStep() {
 }
 
 function saveToFolder(folder, filename, data) {
-  localStorage.setItem(`${folder}/${filename}`, JSON.stringify(data, null, 2));
+  const fullPath = `${folder}/${filename}`;
+  const json = JSON.stringify(data, null, 2);
+
+  // Save to localStorage
+  localStorage.setItem(fullPath, json);
+
+  // Also send to backend server
+  fetch("https://valid-grossly-gibbon.ngrok-free.app/save", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      path: fullPath,
+      content: json
+    })
+  }).catch(err => console.error("Failed to upload to server:", err));
 }
 
 function cleanFileName(name) {
@@ -172,7 +188,6 @@ function showSummary() {
     const raw = localStorage.getItem(`${folder}/trailers.json`);
     const jobStats = {};
 
-    // Load all schedule keys
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key.startsWith(`${folder}/schedules/`) && key.endsWith(".json")) {
