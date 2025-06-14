@@ -43,20 +43,6 @@
     button:hover {
       background: #555;
     }
-    .summary-block {
-      margin-top: 1em;
-      padding: 1em;
-      border: 1px solid #333;
-      background: #1e1e1e;
-    }
-    .scroll-frame {
-      max-height: 200px;
-      overflow-y: auto;
-      border-top: 1px dashed #555;
-      margin-top: 0.5em;
-      padding-top: 0.5em;
-      font-size: 0.95em;
-    }
   </style>
 </head>
 <body>
@@ -79,8 +65,8 @@
   <script type="module" src="script.js"></script>
   <script>
     document.getElementById("refreshBtn").addEventListener("click", () => {
-      localStorage.clear(); // Clear local storage for a true reset
-      location.reload();    // Refresh page
+      localStorage.clear();
+      location.reload();
     });
   </script>
 </body>
