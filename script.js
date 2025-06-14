@@ -34,9 +34,9 @@ async function saveToServer(folder, filename, data) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ folder, filename, data })
     });
-    console.log(`📤 Save requested: ${folder}/${filename}`, res.ok ? "✅" : "❌", res.status);
+    console.log(`📤 ${folder}/${filename}`, res.ok ? "✅" : "❌", res.status);
   } catch (e) {
-    console.warn(`⚠️ Failed to save: ${folder}/${filename}`, e);
+    console.warn(`⚠️ Save failed: ${folder}/${filename}`);
   }
 }
 
@@ -99,15 +99,15 @@ function waitForTrailerPaste(day, index) {
       try {
         parsed = JSON.parse(jsonInput.value.trim());
       } catch {
-        alert("Invalid trailer JSON. Try again.");
+        alert("Invalid trailer JSON.");
         return;
       }
 
       submitBtn.removeEventListener("click", handler);
-      const path = `${day}/trailers`;
+      const folder = `${day}/trailers`;
       const filename = `trailer${index}.json`;
-      localStorage.setItem(`${path}/${filename}`, JSON.stringify(parsed));
-      await saveToServer(path, filename, parsed);
+      localStorage.setItem(`${folder}/${filename}`, JSON.stringify(parsed));
+      await saveToServer(folder, filename, parsed);
       jsonInput.value = "";
       resolve();
     };
