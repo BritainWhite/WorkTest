@@ -1,45 +1,81 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>JSON Trailer Processor</title>
-  <script type="module" src="script.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>JSON Submission Flow</title>
   <style>
-    textarea {
-      width: 100%;
-      height: 150px;
-      margin-top: 10px;
+    body {
+      font-family: sans-serif;
+      background: #121212;
+      color: #e0e0e0;
+      padding: 1em;
+    }
+    .iframe-container {
+      margin: 1em 0;
+      border: 2px solid #444;
+      height: 200px;
+      overflow: hidden;
     }
     iframe {
       width: 100%;
-      height: 300px;
-      margin-top: 20px;
-      border: 1px solid #ccc;
+      height: 100%;
+      border: none;
+    }
+    textarea {
+      width: 100%;
+      height: 200px;
+      margin-bottom: 0.5em;
+      background: #222;
+      color: #fff;
+      border: 1px solid #555;
+      padding: 0.5em;
+      font-family: monospace;
+    }
+    button {
+      padding: 0.5em 1em;
+      margin-right: 0.5em;
+      background: #333;
+      color: #fff;
+      border: 1px solid #666;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #555;
     }
     .summary-block {
-      border: 1px solid #ccc;
-      padding: 10px;
-      margin-bottom: 10px;
+      margin-top: 1em;
+      padding: 1em;
+      border: 1px solid #333;
+      background: #1e1e1e;
     }
     .scroll-frame {
       max-height: 200px;
       overflow-y: auto;
-      border: 1px solid #999;
-      padding: 5px;
-      margin-top: 10px;
-      background: #f8f8f8;
+      border-top: 1px dashed #555;
+      margin-top: 0.5em;
+      padding-top: 0.5em;
+      font-size: 0.95em;
     }
   </style>
 </head>
 <body>
+  <div style="margin-bottom: 1em;">
+    <button id="loadBtn">🔁 Load Saved Data</button>
+    <button id="resetBtn">🧹 Reset Server</button>
+  </div>
+
+  <h2 id="stepLabel"></h2>
+
+  <div class="iframe-container" id="iframePanel">
+    <iframe id="previewIframe" src=""></iframe>
+  </div>
+
   <div id="inputPanel">
-    <h3 id="stepLabel">Step 1: Submit Today JSON</h3>
-    <iframe id="previewIframe"></iframe>
-
-    <label for="jsonInput">Paste JSON content from iframe here:</label>
-    <textarea id="jsonInput" placeholder="Paste the JSON here..."></textarea>
-
+    <textarea id="jsonInput" placeholder="Paste JSON here"></textarea>
     <button id="submitBtn">Submit</button>
   </div>
+
+  <script type="module" src="script.js"></script>
 </body>
 </html>
