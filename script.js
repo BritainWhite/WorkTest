@@ -149,14 +149,14 @@ function showSummary() {
 
   const container = document.createElement("div");
   container.innerHTML = `<h3>Trailer Summary</h3>`;
+
   for (const folder of steps) {
     const raw = localStorage.getItem(`${folder}/trailers.json`);
     if (!raw) continue;
     const data = JSON.parse(raw);
+
     const block = document.createElement("div");
-    block.style.border = "1px solid #ccc";
-    block.style.padding = "10px";
-    block.style.marginBottom = "10px";
+    block.className = "summary-block";
     block.innerHTML = `
       <strong>${folder}</strong><br/>
       Business Date: ${data.business_date}<br/>
@@ -164,11 +164,26 @@ function showSummary() {
       Total Cases: ${data.totals.caseQuantity}<br/>
       Floor Qty: ${data.totals.floorCaseQuantity}<br/>
       Pallets: ${data.totals.palletQuantity}<br/>
-      Breakpacks: ${data.totals.breakPackCount}
+      Breakpacks: ${data.totals.breakPackCount}<br/>
+      <button class="download-btn" onclick="downloadJSON('${folder}/trailers.json', '${folder}_trailers.json')">Download JSON</button>
     `;
     container.appendChild(block);
   }
+
   document.body.appendChild(container);
 }
 
-document.addEventListener("DOMContentLoaded", updateStep);
+function downloadJSON(key, filename) {
+  const json = localStorage.getItem(key);
+  if (!json) return alert("No data found.");
+  const blob = new Blob([json], { type: "application/json" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  updateStep();
+  document.getElementById("submitBtn").addEventListener("click", submitJSON);
+});
