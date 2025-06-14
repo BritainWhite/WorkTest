@@ -12,38 +12,31 @@ let currentStep = 0;
 let cleared = false;
 let submittedData = {};
 
-function getFormattedDateForStep(stepIndex) {
+function getFormattedDate(stepIndex) {
   const now = new Date();
   if (now.getHours() < 6) now.setDate(now.getDate() - 1);
-  now.setDate(now.getDate() + (stepIndex - 0)); // 0: Today, -1: Yesterday, +1: Tomorrow
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const dd = String(now.getDate()).padStart(2, "0");
-  return `${yyyy}/${mm}/${dd}`;
+  now.setDate(now.getDate() + (stepIndex - 0));
+  return `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${String(now.getDate()).padStart(2, "0")}`;
 }
 
-function updateIframeForStep(stepIndex) {
-  const formattedDate = getFormattedDateForStep(stepIndex);
-  const url = `https://radapps3.wal-mart.com/Protected/CaseVisibility/ashx/Main.ashx?func=init&storeNbr=5307&businessDate=${formattedDate}`;
+function updateIframe(stepIndex) {
+  const date = getFormattedDate(stepIndex);
+  const url = `https://radapps3.wal-mart.com/Protected/CaseVisibility/ashx/Main.ashx?func=init&storeNbr=5307&businessDate=${date}`;
   iframe.src = url;
   iframeLink.href = url;
   iframeLink.textContent = url;
 }
 
-async function saveToServer(path, json) {
+async function saveToServer(folder, filename, data) {
   try {
-    await fetch("https://valid-grossly-gibbon.ngrok-free.app/save", {
+    const res = await fetch("https://valid-grossly-gibbon.ngrok-free.app/save", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        folder: path.split("/").slice(0, -1).join("/"),
-        filename: path.split("/").slice(-1)[0],
-        data: json
-      })
+      body: JSON.stringify({ folder, filename, data })
     });
-    console.log(`✅ Saved to server: ${path}`);
+    console.log(`📤 Save requested: ${folder}/${filename}`, res.ok ? "✅" : "❌", res.status);
   } catch (e) {
-    console.warn("⚠️ Server offline, skipping save for", path);
+    console.warn(`⚠️ Failed to save: ${folder}/${filename}`, e);
   }
 }
 
@@ -52,26 +45,18 @@ submitBtn.addEventListener("click", async () => {
   let parsed;
   try {
     parsed = JSON.parse(jsonInput.value.trim());
-  } catch (e) {
+  } catch {
     alert("Invalid JSON.");
     return;
   }
 
-  // Save main.json
-  const mainPath = `${day}/main.json`;
-  localStorage.setItem(mainPath, JSON.stringify(parsed));
-  await saveToServer(mainPath, parsed);
+  localStorage.setItem(`${day}/main.json`, JSON.stringify(parsed));
+  await saveToServer(day, "main.json", parsed);
   submittedData[day] = parsed;
 
-  // Clear server folder on first valid submit
   if (!cleared) {
-    try {
-      await fetch("https://valid-grossly-gibbon.ngrok-free.app/clear", { method: "POST" });
-      cleared = true;
-      console.log("🧹 Server folder cleared");
-    } catch (e) {
-      console.warn("⚠️ Server unavailable for clear.");
-    }
+    await fetch("https://valid-grossly-gibbon.ngrok-free.app/clear", { method: "POST" }).catch(() => {});
+    cleared = true;
   }
 
   currentStep++;
@@ -79,7 +64,7 @@ submitBtn.addEventListener("click", async () => {
 
   if (currentStep < steps.length) {
     stepLabel.textContent = `Submit ${steps[currentStep]}'s JSON`;
-    updateIframeForStep(currentStep);
+    updateIframe(currentStep);
   } else {
     stepLabel.textContent = "Processing trailers...";
     await processTrailers();
@@ -88,20 +73,21 @@ submitBtn.addEventListener("click", async () => {
 });
 
 async function processTrailers() {
-  for (const [index, day] of steps.entries()) {
+  for (let i = 0; i < steps.length; i++) {
+    const day = steps[i];
     const main = submittedData[day];
-    const trailers = main?.shipments?.data?.trailers?.payload ?? [];
-    const businessDate = main?.schedule?.business_date ?? getFormattedDateForStep(index);
+    const trailers = main?.shipments?.data?.trailers?.payload || [];
+    const date = main?.schedule?.business_date || getFormattedDate(i);
 
-    for (let i = 0; i < trailers.length; i++) {
-      const transLoadId = trailers[i].transLoadId;
-      const url = `https://radapps3.wal-mart.com/Protected/CaseVisibility/ashx/Shipments.ashx?func=getLoadSummaryAndDetailsFromAPI&storeNbr=5307&businessDate=${businessDate}&loadID=${transLoadId}&useDataSource=DB2`;
+    for (let j = 0; j < trailers.length; j++) {
+      const transLoadId = trailers[j].transLoadId;
+      const url = `https://radapps3.wal-mart.com/Protected/CaseVisibility/ashx/Shipments.ashx?func=getLoadSummaryAndDetailsFromAPI&storeNbr=5307&businessDate=${date}&loadID=${transLoadId}&useDataSource=DB2`;
+
       iframe.src = url;
       iframeLink.href = url;
       iframeLink.textContent = url;
 
-      console.log(`➡️ Paste JSON for trailer ${i + 1} of ${day}`);
-      await waitForTrailerPaste(day, i + 1);
+      await waitForTrailerPaste(day, j + 1);
     }
   }
 }
@@ -109,50 +95,48 @@ async function processTrailers() {
 function waitForTrailerPaste(day, index) {
   return new Promise((resolve) => {
     const handler = async () => {
-      submitBtn.removeEventListener("click", handler);
       let parsed;
       try {
         parsed = JSON.parse(jsonInput.value.trim());
       } catch {
-        alert("Invalid trailer JSON. Please try again.");
-        return resolve(await waitForTrailerPaste(day, index));
+        alert("Invalid trailer JSON. Try again.");
+        return;
       }
 
-      const path = `${day}/trailers/trailer${index}.json`;
-      localStorage.setItem(path, JSON.stringify(parsed));
-      await saveToServer(path, parsed);
+      submitBtn.removeEventListener("click", handler);
+      const path = `${day}/trailers`;
+      const filename = `trailer${index}.json`;
+      localStorage.setItem(`${path}/${filename}`, JSON.stringify(parsed));
+      await saveToServer(path, filename, parsed);
       jsonInput.value = "";
       resolve();
     };
-    submitBtn.addEventListener("click", handler);
+
+    submitBtn.addEventListener("click", handler, { once: true });
   });
 }
 
 loadBtn.addEventListener("click", async () => {
   try {
-    const res = await fetch("https://valid-grossly-gibbon.ngrok-free.app/loadAll");
-    const all = await res.json();
-    for (const [folder, files] of Object.entries(all)) {
-      for (const [filename, content] of Object.entries(files)) {
-        localStorage.setItem(`${folder}/${filename}`, JSON.stringify(content));
+    const res = await fetch("https://valid-grossly-gibbon.ngrok-free.app/loadAll", { method: "POST" });
+    const data = await res.json();
+    for (const [folder, files] of Object.entries(data)) {
+      for (const [file, json] of Object.entries(files)) {
+        localStorage.setItem(`${folder}/${file}`, JSON.stringify(json));
       }
     }
-    alert("📦 Loaded all saved JSON.");
+    alert("📦 Loaded saved files.");
   } catch {
-    alert("⚠️ Failed to load from server.");
+    alert("⚠️ Load failed.");
   }
 });
 
 resetBtn.addEventListener("click", async () => {
-  try {
-    await fetch("https://valid-grossly-gibbon.ngrok-free.app/clear", { method: "POST" });
-    alert("🧹 Server folder cleared.");
-  } catch {
-    alert("⚠️ Server not reachable.");
-  }
+  await fetch("https://valid-grossly-gibbon.ngrok-free.app/clear", { method: "POST" }).catch(() => {});
+  alert("🧹 Server reset.");
 });
 
 window.addEventListener("DOMContentLoaded", () => {
   stepLabel.textContent = `Submit ${steps[currentStep]}'s JSON`;
-  updateIframeForStep(currentStep);
+  updateIframe(currentStep);
 });
