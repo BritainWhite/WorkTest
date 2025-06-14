@@ -1,281 +1,144 @@
-import { DateTime } from "https://cdn.jsdelivr.net/npm/luxon@3.4.3/+esm";
+import { DateTime } from "https://cdn.jsdelivr.net/npm/luxon@3.4.3/build/es6/luxon.min.js";
 
-let step = 0;
-let cleared = false;
-const steps = ["Today", "Yesterday", "Tomorrow"];
+const initIframe = document.getElementById("previewIframe");
+const input = document.getElementById("jsonInput");
+const submitBtn = document.getElementById("submitBtn");
+const stepLabel = document.getElementById("stepLabel");
+const loadBtn = document.getElementById("loadBtn");
+const resetBtn = document.getElementById("resetBtn");
 
-// Clear server on first submission if needed
-async function ensureServerCleared() {
-  if (cleared) return;
+let steps = ["Today", "Yesterday", "Tomorrow"];
+let currentStep = 0;
+let clearedServerAlready = false;
+const storage = window.localStorage;
+const folderMap = { 0: "Today", 1: "Yesterday", 2: "Tomorrow" };
+
+updateStep();
+
+loadBtn.onclick = async () => {
+  try {
+    const res = await fetch("https://valid-grossly-gibbon.ngrok-free.app/load");
+    const data = await res.json();
+    for (const [key, value] of Object.entries(data)) {
+      storage.setItem(key, value);
+    }
+    alert("✅ Loaded saved data.");
+    location.reload();
+  } catch (err) {
+    alert("❌ Failed to load saved data.");
+  }
+};
+
+resetBtn.onclick = async () => {
   try {
     await fetch("https://valid-grossly-gibbon.ngrok-free.app/clear", { method: "POST" });
-    cleared = true;
-    console.log("✅ Server cleared before starting.");
+    alert("🧹 Server reset.");
+    location.reload();
   } catch (err) {
-    console.warn("❌ Failed to clear server:", err);
+    alert("❌ Failed to reset server.");
   }
-}
+};
 
-function getDateOffset(offset) {
-  const now = new Date();
-  if (now.getHours() < 6) now.setDate(now.getDate() - 1);
-  now.setDate(now.getDate() + offset);
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const dd = String(now.getDate()).padStart(2, "0");
-  return `${yyyy}/${mm}/${dd}`;
-}
+submitBtn.onclick = async () => {
+  const jsonRaw = input.value.trim();
+  if (!jsonRaw) return;
 
-function updateStep() {
-  const label = document.getElementById("stepLabel");
-  const iframe = document.getElementById("previewIframe");
-  const stepName = steps[step];
-  const dateOffset = step === 0 ? 0 : (step === 1 ? -1 : 1);
-  const url = `https://radapps3.wal-mart.com/Protected/CaseVisibility/ashx/Main.ashx?func=init&storeNbr=5307&businessDate=${getDateOffset(dateOffset)}`;
-
-  label.textContent = `Step ${step + 1}: Submit ${stepName} JSON`;
-  iframe.src = url;
-}
-
-function saveToFolder(folder, filename, data) {
-  const fullPath = `${folder}/${filename}`;
-  const json = JSON.stringify(data, null, 2);
-
-  localStorage.setItem(fullPath, json);
-
-  fetch("https://valid-grossly-gibbon.ngrok-free.app/save", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ path: fullPath, content: json })
-  }).catch(err => console.error("Upload error:", err));
-}
-
-function cleanFileName(name) {
-  return name.replace(/[<>:"\/\\|?*\u0000-\u001F]/g, '').replace(/\s+/g, "_").trim();
-}
-
-async function submitJSON() {
-  await ensureServerCleared();
-
-  const textarea = document.getElementById("jsonInput");
-  let content = textarea.value.trim();
-
-  try {
-    const parsed = JSON.parse(content);
-    const folder = steps[step];
-    saveToFolder(folder, "main.json", parsed);
-
-    const trailersJson = generateTrailerSummary(parsed);
-    saveToFolder(folder, "trailers.json", trailersJson);
-
-    const assocGroups = {};
-    const associates = parsed.schedule?.scheduled_associates ?? [];
-    for (const assoc of associates) {
-      const title = assoc.shift1_job_desc?.trim() || "Unknown";
-      const cleaned = cleanFileName(title);
-      if (!assocGroups[cleaned]) assocGroups[cleaned] = [];
-      assocGroups[cleaned].push(assoc);
+  if (!clearedServerAlready) {
+    try {
+      await fetch("https://valid-grossly-gibbon.ngrok-free.app/clear", { method: "POST" });
+      clearedServerAlready = true;
+    } catch (e) {
+      console.warn("Could not clear server (skipped):", e);
     }
-
-    for (const [cleanedTitle, group] of Object.entries(assocGroups)) {
-      saveToFolder(`${folder}/schedules`, `${cleanedTitle}.json`, group);
-    }
-
-  } catch (e) {
-    alert("Invalid JSON.");
-    return;
   }
 
-  textarea.value = "";
-  step++;
-  if (step < steps.length) {
+  const label = steps[currentStep];
+  const folder = folderMap[currentStep];
+  storage.setItem(`${folder}/main.json`, jsonRaw);
+
+  await sendToServer(`${folder}/main.json`, jsonRaw);
+  await generateSchedules(folder, JSON.parse(jsonRaw));
+
+  currentStep++;
+
+  if (currentStep < steps.length) {
     updateStep();
   } else {
-    showSummary();
+    await processAllTrailers();
+    stepLabel.innerText = "Finished 😊";
   }
+
+  input.value = "";
+};
+
+function updateStep() {
+  const label = steps[currentStep];
+  const today = DateTime.now();
+  const date = today.plus({ days: currentStep - 1 });
+  const formatted = date.toFormat("yyyy/LL/dd");
+  const url = `https://radapps3.wal-mart.com/Protected/CaseVisibility/ashx/Main.ashx?func=init&storeNbr=5307&businessDate=${formatted}`;
+  stepLabel.innerText = `Submit ${label}'s JSON`;
+  initIframe.src = url;
 }
 
-function generateTrailerSummary(data) {
-  const businessDate = DateTime.fromISO(data.schedule?.business_date ?? "");
-  const movedShipments = data.shipments_moved ?? [];
-  const trailers = data.shipments?.data?.trailers?.payload ?? [];
-  const sdlEntries = data.sdl ?? [];
-  const results = [];
-
-  let totalBreakPackCount = 0;
-  let totalCaseQty = 0;
-  let totalFloorQty = 0;
-  let totalPalletQty = 0;
-
-  for (const trailer of trailers) {
-    const stop = trailer.stops?.[0];
-    if (!stop || !stop.arrivalStatus?.ts) continue;
-
-    const moved = movedShipments.find(m => String(m.load_id) === String(trailer.transLoadId));
-    if (moved?.unload_date) {
-      const unloadDate = DateTime.fromISO(moved.unload_date);
-      if (unloadDate > businessDate) continue;
-    }
-
-    const arrivalTs = DateTime.fromISO(stop.arrivalStatus.ts, { zone: "utc" });
-    const arrivalETATs = stop.arrivalETATs ? DateTime.fromISO(stop.arrivalETATs, { zone: "utc" }) : null;
-    const shipment = stop.actualShipments?.[0] ?? {};
-    const planned = stop.plannedShipments?.[0] ?? {};
-
-    const actualCaseQuantity = shipment.caseQuantity ?? null;
-    const actualFloorCaseQuantity = shipment.floorCaseQuantity ?? null;
-    const actualPalletQuantity = shipment.palletQuantity ?? null;
-
-    const plannedCaseQuantity = planned.caseQuantity ?? null;
-    const plannedFloorCaseQuantity = planned.floorCaseQuantity ?? null;
-    const plannedPalletQuantity = planned.palletQuantity ?? null;
-
-    const sdlMatch = sdlEntries.find(entry =>
-      String(entry.load_id) === String(trailer.transLoadId)
-    );
-
-    const breakpack_boxes = sdlMatch?.breakpack_boxes ?? null;
-    const groc_cases = sdlMatch?.groc_cases ?? null;
-    const gm_cases = sdlMatch?.gm_cases ?? null;
-    const total_cases = sdlMatch?.total_cases ?? null;
-
-    const breakPackCount = trailer.caseSummary?.breakPackCount ?? null;
-    if (breakPackCount) totalBreakPackCount += breakPackCount;
-
-    totalCaseQty += actualCaseQuantity ?? plannedCaseQuantity ?? 0;
-    totalFloorQty += actualFloorCaseQuantity ?? plannedFloorCaseQuantity ?? 0;
-    totalPalletQty += actualPalletQuantity ?? plannedPalletQuantity ?? 0;
-
-    results.push({
-      transLoadId: trailer.transLoadId,
-      carrierTrailerId: trailer.trailerDetails?.carrierTrailerId ?? null,
-      arrivalStatus: stop.arrivalStatus?.code ?? null,
-      commodityType: stop.commodityTypes?.[0] ?? null,
-      stopStatus: stop.stopStatus ?? null,
-      arrivalStatusTs: arrivalTs.toISO(),
-      arrivalETATs: arrivalETATs?.toISO() ?? null,
-      localArrivalStatusTs: arrivalTs.setZone("America/Chicago").toISO(),
-      localArrivalETATs: arrivalETATs?.setZone("America/Chicago").toISO() ?? null,
-      loadStatus: trailer.loadStatus ?? null,
-      breakPackCount,
-      actualCaseQuantity,
-      actualFloorCaseQuantity,
-      actualPalletQuantity,
-      plannedCaseQuantity,
-      plannedPalletQuantity,
-      plannedFloorCaseQuantity,
-      breakpack_boxes,
-      groc_cases,
-      gm_cases,
-      total_cases
+async function sendToServer(path, content) {
+  try {
+    await fetch("https://valid-grossly-gibbon.ngrok-free.app/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path, content })
     });
+  } catch (err) {
+    console.warn(`⚠️ Could not save ${path}:`, err);
   }
-
-  return {
-    business_date: data.schedule?.business_date ?? null,
-    trailer_count: results.length,
-    trailer_transLoadId_list: results.map(r => Number(r.transLoadId)),
-    trailer_trailerId_list: results.map(r => Number(r.carrierTrailerId)),
-    totals: {
-      breakPackCount: totalBreakPackCount,
-      caseQuantity: totalCaseQty,
-      floorCaseQuantity: totalFloorQty,
-      palletQuantity: totalPalletQty
-    },
-    trailers: results
-  };
 }
 
-function showSummary() {
-  document.getElementById("inputPanel").style.display = "none";
+async function generateSchedules(folder, data) {
+  const associates = data.schedule?.scheduled_associates ?? [];
+  const jobs = {};
 
-  const container = document.createElement("div");
-  container.innerHTML = `<h3>Trailer Summary</h3>`;
+  for (const assoc of associates) {
+    const job = (assoc.shift1_job_desc || "Unknown").replace(/[^\w\s-]/g, "").replace(/\s+/g, "_");
+    if (!jobs[job]) jobs[job] = [];
+    jobs[job].push(assoc);
+  }
 
-  for (const folder of steps) {
-    const raw = localStorage.getItem(`${folder}/trailers.json`);
-    const jobStats = {};
+  for (const [jobKey, list] of Object.entries(jobs)) {
+    const json = JSON.stringify(list, null, 2);
+    const path = `${folder}/schedules/${jobKey}.json`;
+    storage.setItem(path, json);
+    await sendToServer(path, json);
+  }
+}
 
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key.startsWith(`${folder}/schedules/`) && key.endsWith(".json")) {
-        const group = JSON.parse(localStorage.getItem(key));
-        const jobName = key.replace(`${folder}/schedules/`, "").replace(/\.json$/, "").replace(/_/g, " ");
-        jobStats[jobName] = group.length;
-      }
+async function processAllTrailers() {
+  const days = ["Today", "Yesterday", "Tomorrow"];
+  const baseUrl = "https://radapps3.wal-mart.com/Protected/CaseVisibility/ashx/Shipments.ashx?func=getLoadSummaryAndDetailsFromAPI&storeNbr=5307&businessDate={DATE}&loadID={ID}&useDataSource=DB2";
+  const today = DateTime.now();
+
+  for (let i = 0; i < 3; i++) {
+    const folder = days[i];
+    const date = today.plus({ days: i - 1 }).toFormat("yyyy/LL/dd");
+    const raw = storage.getItem(`${folder}/main.json`);
+    if (!raw) continue;
+
+    const json = JSON.parse(raw);
+    const trailers = json?.shipments?.data?.trailers?.payload ?? [];
+
+    for (const trailer of trailers) {
+      const transLoadId = trailer.transLoadId;
+      if (!transLoadId) continue;
+
+      const trailerUrl = baseUrl
+        .replace("{DATE}", date)
+        .replace("{ID}", transLoadId);
+
+      // just updating the iframe to trigger manual copy if needed
+      initIframe.src = trailerUrl;
+
+      // optionally you can log progress:
+      console.log(`➡️  Loading trailer ${transLoadId} for ${folder}`);
+      await new Promise(res => setTimeout(res, 400)); // delay to let iframe load (or skip)
     }
-
-    const jobBlock = Object.entries(jobStats)
-      .map(([job, count]) => `${job}: ${count}`)
-      .join("<br/>");
-
-    const block = document.createElement("div");
-    block.className = "summary-block";
-    block.innerHTML = `
-      <strong>${folder}</strong><br/>
-      ${raw ? `Trailers: ${JSON.parse(raw).trailer_count}<br/>` : ""}
-      <div class="scroll-frame">${jobBlock || "No schedule data."}</div>
-    `;
-    container.appendChild(block);
   }
-
-  document.body.appendChild(container);
 }
-
-// Button Handlers
-function resetServer() {
-  fetch("https://valid-grossly-gibbon.ngrok-free.app/clear", { method: "POST" })
-    .then(() => {
-      cleared = true;
-      alert("✅ Server has been cleared.");
-    })
-    .catch(() => alert("❌ Failed to clear server."));
-}
-
-function loadFromServer() {
-  const files = [
-    "Today/main.json",
-    "Today/trailers.json",
-    "Yesterday/main.json",
-    "Yesterday/trailers.json",
-    "Tomorrow/main.json",
-    "Tomorrow/trailers.json"
-  ];
-  const jobs = [];
-
-  for (const day of steps) {
-    jobs.push(fetch(`https://valid-grossly-gibbon.ngrok-free.app/folder/${day}/schedules`)
-      .then(res => res.json())
-      .then(fileList => fileList.map(f => `${day}/schedules/${f}`))
-      .catch(() => []));
-  }
-
-  Promise.all([
-    ...files.map(path =>
-      fetch(`https://valid-grossly-gibbon.ngrok-free.app/file/${path}`)
-        .then(res => res.json())
-        .then(json => localStorage.setItem(path, JSON.stringify(json)))
-        .catch(() => null)
-    ),
-    ...jobs.map(group =>
-      group.then(paths =>
-        Promise.all(paths.map(path =>
-          fetch(`https://valid-grossly-gibbon.ngrok-free.app/file/${path}`)
-            .then(res => res.json())
-            .then(json => localStorage.setItem(path, JSON.stringify(json)))
-            .catch(() => null)
-        ))
-      )
-    )
-  ]).then(() => {
-    alert("✅ Loaded data from server.");
-    showSummary();
-  });
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-  updateStep();
-  document.getElementById("submitBtn").addEventListener("click", submitJSON);
-  document.getElementById("resetBtn").addEventListener("click", resetServer);
-  document.getElementById("loadBtn").addEventListener("click", loadFromServer);
-});
